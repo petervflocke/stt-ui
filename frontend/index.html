@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Local Transcription UI</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Local Transcription</h1>
+
+    <section class="card">
+      <div class="row">
+        <button id="checkHealth">Check backend</button>
+        <span id="healthOut" class="muted"></span>
+      </div>
+
+      <form id="form">
+        <label class="label">Audio file</label>
+        <input id="file" name="file" type="file" accept="audio/*" required />
+
+        <div class="grid">
+          <div>
+            <label class="label">Language (optional)</label>
+            <input id="language" name="language" placeholder="de, en, pl" />
+          </div>
+          <div>
+            <label class="label">Temperature</label>
+            <input id="temperature" name="temperature" value="0.0" />
+          </div>
+        </div>
+
+        <label class="label">Prompt (optional)</label>
+        <textarea id="prompt" name="prompt" rows="3" placeholder="Context, names, topic..."></textarea>
+
+        <div class="row">
+          <button type="submit" id="submit">Transcribe</button>
+          <span id="status" class="muted"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="row space">
+        <h2>Result</h2>
+        <div class="row">
+          <button id="copy" disabled>Copy</button>
+          <button id="downloadTxt" disabled>Download .txt</button>
+          <button id="downloadJson" disabled>Download .json</button>
+        </div>
+      </div>
+      <pre id="out" class="out"></pre>
+    </section>
+
+    <p class="muted small">Mic mode will be added in step 2.</p>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Project specific Codex configuration for this repository.
+# Codex reads per project config from .codex/config.toml after the project is trusted. :contentReference[oaicite:1]{index=1}
+
+[project]
+# Help Codex find the root even if you open a subfolder
+project_root_markers = [".git", "docker-compose.yml", ".codex"]
+
+[features]
+# Allow layered AGENTS.md if you add more later (optional)
+child_agents_md = true
+
+[context]
+# Keep the agent focused
+max_files = 200
+include_hidden = false
+follow_symlinks = false
+
+[commands]
+# Useful shortcuts Codex can run
+lint = "python -m compileall backend && node -v >/dev/null 2>&1 || true"
+smoke = "docker compose up -d --build && curl -fsS http://127.0.0.1:8010/api/health"

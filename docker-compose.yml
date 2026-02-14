@@ -1,0 +1,13 @@
+services:
+  stt-ui:
+    build: ./backend
+    container_name: stt-ui
+    ports:
+      - "8010:8010"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      STT_API_BASE: "http://host.docker.internal:8001"
+    volumes:
+      - ./frontend:/app/frontend:ro
+    restart: unless-stopped
