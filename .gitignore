@@ -1,43 +1,31 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg-info/
-.dist-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Virtualenvs
-venv/
-.venv/
-whisper_env/
-env/
-ENV/
-
-# Local config
-.env
-.env.*
-*.local
-
-# Logs
-*.log
-
 # OS
 .DS_Store
 Thumbs.db
 
-# Editor
+# Editors
 .vscode/
 .idea/
 *.swp
 
-# Frontend artifacts
+# Logs
+*.log
+
+# Node
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 dist/
 build/
 
-# Docker
-*.pid
+# Env
+.env
+.env.*
+*.local
+
+# Python leftovers (from current baseline)
+__pycache__/
+*.py[cod]
+.venv/
+venv/

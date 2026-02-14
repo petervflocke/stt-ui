@@ -1,21 +1,27 @@
-# Project specific Codex configuration for this repository.
-# Codex reads per project config from .codex/config.toml after the project is trusted. :contentReference[oaicite:1]{index=1}
+# Project scoped Codex config. Codex reads ~/.codex/config.toml and can also read
+# a project file at .codex/config.toml for trusted projects. :contentReference[oaicite:1]{index=1}
 
 [project]
-# Help Codex find the root even if you open a subfolder
-project_root_markers = [".git", "docker-compose.yml", ".codex"]
+project_root_markers = [".git", "docker-compose.yml", ".codex", "PROJECT_PLAN.md"]
 
 [features]
-# Allow layered AGENTS.md if you add more later (optional)
 child_agents_md = true
 
 [context]
-# Keep the agent focused
-max_files = 200
+max_files = 300
 include_hidden = false
 follow_symlinks = false
 
 [commands]
-# Useful shortcuts Codex can run
-lint = "python -m compileall backend && node -v >/dev/null 2>&1 || true"
-smoke = "docker compose up -d --build && curl -fsS http://127.0.0.1:8010/api/health"
+deploy = "make deploy"
+smoke  = "make deploy && curl -fsS http://127.0.0.1:8010/api/health"
+logs   = "make logs"
+
+[frontend]
+framework = "react"
+bundle = "vite"
+state_library = "none"
+ui_framework = "none"
+page_count = "single"
+component_style = "few_simple_components"
+architecture = "dumb_ui_plus_api_helper"

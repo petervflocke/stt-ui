@@ -1,59 +1,60 @@
-# Project plan, STT UI
+# Project plan, STT UI (React + Node)
 
 ## Goal
-Provide a clean web UI for local speech to text on ai01, using the existing host STT service:
-- Backend proxy container on port 8010
-- Host STT API on port 8001, endpoint: POST /v1/audio/transcriptions
+Build a structured web app for local transcription that uses the existing host STT service:
+- Host STT API stays as is: http://127.0.0.1:8001/v1/audio/transcriptions
 - Keep Open WebUI mic dictation as is
+- Replace the current UI stack with:
+  - Node backend proxy (upload, forward to STT, health)
+  - React frontend (upload, results, downloads)
+  - Mic mode can be added in step 2
+  - Keep implementation minimal: no state library, no UI framework, one page, and dumb components that call a separate API helper
 
-## Current state
-- File upload transcription works (proxy, multipart upload, transcript output, download txt and json).
-- Host STT service is persistent via systemd (stt-server).
+## Non-negotiables
+- Do not change the host STT server contract or ports.
+- Do not require Docker GPU support.
+- Keep requests server side via the proxy, no browser to STT direct calls.
+- Keep a single command to run: docker compose up, and it must survive reboots.
+
+## Current baseline
+- Docker compose runs a Node proxy container on 8010 and serves the built React app.
+- The proxy forwards multipart upload to host STT on port 8001.
+- Current stack is Node + React only.
+
+## Target architecture
+Repo layout:
+- server/ (Node)
+  - /api/health: returns upstream STT health JSON
+  - /api/transcribe: accepts multipart upload, forwards to STT, returns JSON
+  - Serves built frontend assets (production)
+- client/ (React, Vite)
+  - Upload page
+  - Result view (copy, download txt, download json)
+  - Later: mic recording UI
+
+Compose:
+- One container is fine (Node serving both API and static build), or two containers if needed.
+- Must keep host mapping: host.docker.internal -> host-gateway
+- Use env STT_API_BASE=http://host.docker.internal:8001
 
 ## Milestones
+M1, migrate without feature loss
+- Create Node proxy with same endpoints as current Python proxy
+- Create React app that matches current behavior
+- Keep port 8010
+Acceptance: upload works, downloads work, health works
 
-### M1, UI polish (no behavior changes)
-- Improve layout and spacing
-- Clear “busy” states, disable controls while running
-- Better error messages (show HTTP code and backend detail)
-- Add transcript stats (chars, duration if available, language, confidence if returned)
+M2, mic mode
+- MediaRecorder record then transcribe on stop
+- Show clear recording state and errors
+Acceptance: mic mode works in Chromium and Firefox
 
-Acceptance
-- No new dependencies required on host
-- Still runs with `docker compose up -d --build`
+M3, hardening
+- Better progress and error handling
+- Larger file reliability, extend proxy timeouts
+Acceptance: long file returns full transcript, no UI truncation
 
-### M2, microphone mode (web)
-- Browser mic capture using MediaRecorder
-- Two modes:
-  1) Record then transcribe on stop (simplest)
-  2) Optional chunked mode later (append results)
-- Output appears in the same transcript panel
-- Provide “clear”, “copy”, “download” actions
-
-Acceptance
-- Works in Chromium and Firefox
-- Handles 30 to 120 seconds smoothly
-
-### M3, long audio workflows
-- Support large uploads without timeouts
-- Server side streaming not required, but:
-  - show progress for upload
-  - ensure backend timeouts are high enough
-- Optional chunked transcription on backend if we want partial results
-
-Acceptance
-- 60 to 90 minute file uploads complete, returns full transcript
-
-### M4, operational hardening
-- Health page shows both UI status and upstream STT status
-- Add basic access control (optional):
-  - simple HTTP basic auth in proxy
-  - or allowlist by IP
-
-Acceptance
-- No manual cleanup needed
-- Logs are readable, no sensitive data logged
-
-## Non goals
-- No Docker GPU enablement
-- No changes to NVIDIA driver, CUDA, or existing Ollama / Open WebUI setup
+## Commands
+- dev: run React dev server + Node proxy with proxying configured
+- prod: docker compose up -d --build
+- smoke: curl http://127.0.0.1:8010/api/health

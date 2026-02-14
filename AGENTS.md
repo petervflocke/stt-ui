@@ -1,52 +1,56 @@
-# AGENTS.md, STT UI
+# AGENTS.md, STT UI (React + Node migration)
 
-## Context
-This repo provides a web UI for local transcription.
-Architecture:
-- `backend/app.py` is a FastAPI app inside Docker, exposed on port 8010.
-- It serves static frontend from `/static` and proxies requests to the host STT API.
-- Host STT API is systemd managed at `http://host.docker.internal:8001`.
+## High level instruction
+Migrate the current UI to React + Node in a controlled way.
+Keep the current working baseline functional at all times.
 
-Upstream STT endpoint:
-- POST `${STT_API_BASE}/v1/audio/transcriptions`
-- multipart form fields:
-  - file (required)
-  - language (optional, de|en|pl)
-  - prompt (optional)
-  - temperature (optional float, default 0.0)
-Response JSON includes `text` and may include language metadata.
+## Constraints
+- Do not modify the host STT server, its code, or its systemd unit.
+- STT server stays at http://host.docker.internal:8001 with:
+  - GET /health
+  - POST /v1/audio/transcriptions (multipart file upload)
+- Do not introduce Docker GPU requirements.
+- Prefer small, reviewable changes.
+- Always keep a working path to upload and transcribe.
 
-## How to run locally
-- Start UI:
-  - `docker compose up -d --build`
-- View UI:
-  - `http://192.168.0.222:8010`
-- Confirm upstream STT:
-  - `curl -s http://127.0.0.1:8001/health`
+## Required endpoints in the new Node proxy
+- GET /api/health
+  - Fetch `${STT_API_BASE}/health` and return JSON.
+- POST /api/transcribe
+  - Accept multipart form-data with:
+    - file (required)
+    - language (optional)
+    - prompt (optional)
+    - temperature (optional)
+  - Forward to `${STT_API_BASE}/v1/audio/transcriptions` and return the JSON response.
+  - Use generous timeouts for long audio.
 
-## Development workflow
-- Prefer small, reviewable commits.
-- Do not introduce heavy frameworks unless requested.
-- Keep dependencies minimal.
-- Avoid breaking the current file upload flow.
+## Frontend requirements
+- Provide upload flow and show full transcript text.
+- Provide copy button.
+- Provide download transcript.txt and transcript.json.
+- Provide clear states: idle, uploading, processing, done, error.
+- Keep UI simple and fast.
+- Keep React footprint small:
+  - no state library
+  - no UI framework
+  - one page with a few components
+  - strict split: dumb UI components + API helper module
 
-## Code style
-- Python: keep functions small, clear error messages, no hidden side effects.
-- JavaScript: no frameworks, modern browser APIs only, readable names.
-- UI: simple, fast, accessible. Provide clear states: idle, running, error, done.
+## Migration strategy
+1) Add new folders server/ and client/ without deleting existing code.
+2) Implement Node proxy first, keep same behavior as current Python proxy.
+3) Implement React UI to match current features.
+4) Update docker compose to run Node and serve the built React app.
+5) Remove old Python proxy only after the new stack is verified.
 
-## Requirements for any change
-- Must not require Docker GPU support.
-- Must keep proxy pattern, avoid CORS issues.
-- Must not change the host `stt_server.py` contract unless explicitly requested.
-- Any new feature must include a quick manual test description.
+## Testing checklist
+- docker compose up -d --build
+- Open http://192.168.0.222:8010
+- Upload small mp3, get transcript
+- Upload large mp3, get full transcript
+- curl http://127.0.0.1:8010/api/health returns upstream info
 
-## Next priorities
-1) UI polish without changing behavior.
-2) Add microphone mode using MediaRecorder, record then transcribe on stop.
-3) Add safeguards for large files and long processing time.
-
-## What to do when unsure
-- Inspect existing code first.
-- Prefer deterministic checks over guesswork.
-- If a change impacts ports, confirm what else binds those ports on this host.
+## Step 2, mic mode (later)
+Implement record then transcribe on stop using MediaRecorder.
+Do not attempt realtime streaming unless requested.
