@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import HealthCheck from "./components/HealthCheck.jsx";
 import MicRecorderPanel from "./components/MicRecorderPanel.jsx";
 import ResultPanel from "./components/ResultPanel.jsx";
 import TranscribeForm from "./components/TranscribeForm.jsx";
@@ -72,6 +71,7 @@ export default function App() {
 
   const canUseResult = useMemo(() => resultText.trim().length > 0, [resultText]);
   const micActive = micStatus === "recording" || micStatus === "sending";
+  const tabsLocked = submitting || micActive;
 
   const mediaStreamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -90,6 +90,7 @@ export default function App() {
   const currentMimeTypeRef = useRef("");
   const activeSendCountRef = useRef(0);
   const queueRef = useRef(Promise.resolve());
+  const uploadAbortRef = useRef(null);
   const levelUiTickRef = useRef(0);
   const resultTextRef = useRef("");
   const languageRef = useRef("");
@@ -401,6 +402,10 @@ export default function App() {
   useEffect(() => {
     return () => {
       shouldRecordRef.current = false;
+      if (uploadAbortRef.current) {
+        uploadAbortRef.current.abort();
+        uploadAbortRef.current = null;
+      }
       stopAudioResources();
     };
   }, []);
@@ -437,6 +442,8 @@ export default function App() {
     setSubmitting(true);
     setUploadStatus("uploading...");
     setResultText("");
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
 
     try {
       setUploadStatus("processing...");
@@ -444,16 +451,29 @@ export default function App() {
         file,
         language: language.trim(),
         prompt: prompt.trim(),
-        temperature: temperature.trim()
+        temperature: temperature.trim(),
+        signal: controller.signal
       });
       const text = extractTranscriptText(response);
       setResultText(text);
       setUploadStatus("done");
     } catch (error) {
-      setUploadStatus("error");
-      setResultText(String(error.message || error));
+      if (error && error.name === "AbortError") {
+        setUploadStatus("cancelled");
+        setResultText("Transcription cancelled.");
+      } else {
+        setUploadStatus("error");
+        setResultText(String(error.message || error));
+      }
     } finally {
+      uploadAbortRef.current = null;
       setSubmitting(false);
+    }
+  }
+
+  function handleCancelSubmit() {
+    if (uploadAbortRef.current) {
+      uploadAbortRef.current.abort();
     }
   }
 
@@ -474,74 +494,106 @@ export default function App() {
 
   return (
     <main className="wrap">
-      <h1>Local Transcription</h1>
+      <header className="top-bar">
+        <h1>Local Transcription</h1>
+        <div className="health-tools">
+          <button
+            type="button"
+            className="btn-compact"
+            onClick={handleCheckHealth}
+            disabled={healthLoading}
+            aria-label="Check backend status"
+          >
+            {healthLoading ? "Checking..." : "Check backend"}
+          </button>
+          <span className="muted health-details">{healthOutput}</span>
+        </div>
+      </header>
 
       <section className="card">
-        <HealthCheck loading={healthLoading} output={healthOutput} onCheck={handleCheckHealth} />
-
         <div className="tabs" role="tablist" aria-label="Input mode">
           <button
             type="button"
+            id="tab-upload"
             role="tab"
             className={`tab ${activeTab === "upload" ? "active" : ""}`}
             aria-selected={activeTab === "upload"}
-            onClick={() => setActiveTab("upload")}
+            aria-controls="panel-upload"
+            disabled={tabsLocked}
+            onClick={() => {
+              if (!tabsLocked) setActiveTab("upload");
+            }}
           >
             File Upload
           </button>
           <button
             type="button"
+            id="tab-mic"
             role="tab"
             className={`tab ${activeTab === "mic" ? "active" : ""}`}
             aria-selected={activeTab === "mic"}
-            onClick={() => setActiveTab("mic")}
+            aria-controls="panel-mic"
+            disabled={tabsLocked}
+            onClick={() => {
+              if (!tabsLocked) setActiveTab("mic");
+            }}
           >
             Microphone
           </button>
         </div>
 
         <section
-          className="tab-panel"
+          id="panel-upload"
+          className={`tab-panel ${activeTab === "upload" ? "" : "hidden"}`}
           role="tabpanel"
-          aria-label={activeTab === "upload" ? "File upload panel" : "Microphone panel"}
+          aria-labelledby="tab-upload"
+          hidden={activeTab !== "upload"}
         >
-          {activeTab === "upload" ? (
-            <TranscribeForm
-              language={language}
-              prompt={prompt}
-              temperature={temperature}
-              submitting={submitting}
-              status={uploadStatus}
-              onLanguageChange={setLanguage}
-              onPromptChange={setPrompt}
-              onTemperatureChange={setTemperature}
-              onSubmit={handleSubmit}
-            />
-          ) : (
-            <MicRecorderPanel
-              language={language}
-              prompt={prompt}
-              temperature={temperature}
-              micStatus={micStatus}
-              micError={micError}
-              micLevel={micLevel}
-              micThreshold={micThreshold}
-              micSensitivity={micSensitivity}
-              micMaxChunkSeconds={micMaxChunkSeconds}
-              micResultMode={micResultMode}
-              useRollingPrompt={useRollingPrompt}
-              isActive={micActive}
-              onLanguageChange={setLanguage}
-              onPromptChange={setPrompt}
-              onTemperatureChange={setTemperature}
-              onSensitivityChange={(value) => setMicSensitivity(Number(value))}
-              onMaxChunkSecondsChange={handleMaxChunkSecondsChange}
-              onResultModeChange={setMicResultMode}
-              onUseRollingPromptChange={setUseRollingPrompt}
-              onStart={startMic}
-              onStop={stopMic}
-            />
-          )}
+          <TranscribeForm
+            language={language}
+            prompt={prompt}
+            temperature={temperature}
+            submitting={submitting}
+            status={uploadStatus}
+            onLanguageChange={setLanguage}
+            onPromptChange={setPrompt}
+            onTemperatureChange={setTemperature}
+            canCancel={submitting}
+            onCancel={handleCancelSubmit}
+            onSubmit={handleSubmit}
+          />
+        </section>
+
+        <section
+          id="panel-mic"
+          className={`tab-panel ${activeTab === "mic" ? "" : "hidden"}`}
+          role="tabpanel"
+          aria-labelledby="tab-mic"
+          hidden={activeTab !== "mic"}
+        >
+          <MicRecorderPanel
+            language={language}
+            prompt={prompt}
+            temperature={temperature}
+            micStatus={micStatus}
+            micError={micError}
+            micLevel={micLevel}
+            micThreshold={micThreshold}
+            micSensitivity={micSensitivity}
+            micMaxChunkSeconds={micMaxChunkSeconds}
+            micResultMode={micResultMode}
+            useRollingPrompt={useRollingPrompt}
+            isActive={micActive}
+            onLanguageChange={setLanguage}
+            onPromptChange={setPrompt}
+            onTemperatureChange={setTemperature}
+            onSensitivityChange={(value) => setMicSensitivity(Number(value))}
+            onMaxChunkSecondsChange={handleMaxChunkSecondsChange}
+            onResultModeChange={setMicResultMode}
+            onUseRollingPromptChange={setUseRollingPrompt}
+            onStart={startMic}
+            onStop={stopMic}
+          />
         </section>
       </section>
 

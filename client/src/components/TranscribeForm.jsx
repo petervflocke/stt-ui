@@ -4,9 +4,11 @@ export default function TranscribeForm({
   temperature,
   submitting,
   status,
+  canCancel,
   onLanguageChange,
   onPromptChange,
   onTemperatureChange,
+  onCancel,
   onSubmit
 }) {
   return (
@@ -54,11 +56,17 @@ export default function TranscribeForm({
         onChange={(event) => onPromptChange(event.target.value)}
       />
 
-      <div className="row">
+      <div className="row submit-row">
         <button type="submit" disabled={submitting}>
           {submitting ? "Transcribing..." : "Transcribe"}
         </button>
         <span className="muted">{status}</span>
+      </div>
+
+      <div className="row cancel-row">
+        <button type="button" onClick={onCancel} disabled={!canCancel}>
+          Cancel
+        </button>
       </div>
     </form>
   );
