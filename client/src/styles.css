@@ -14,6 +14,21 @@ body {
   padding: 24px;
 }
 
+.top-bar {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.health-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 h1 {
   margin: 0 0 16px;
   font-size: 28px;
@@ -41,6 +56,7 @@ h2 {
 
 input,
 textarea,
+select,
 button {
   width: 100%;
   box-sizing: border-box;
@@ -54,6 +70,32 @@ button {
 button {
   cursor: pointer;
   background: #1a2540;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+  box-shadow: inset 0 0 0 1px #3b5480;
+}
+
+button:focus-visible {
+  outline: 2px solid #4b6ea7;
+  outline-offset: 1px;
+}
+
+.btn-compact {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.health-details {
+  white-space: nowrap;
+  min-width: 120px;
 }
 
 button:disabled {
@@ -65,6 +107,14 @@ button:disabled {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.submit-row {
+  margin-top: 12px;
+}
+
+.cancel-row {
+  margin-top: 10px;
 }
 
 .row > * {
@@ -85,6 +135,10 @@ button:disabled {
   gap: 12px;
 }
 
+.mic-controls-row {
+  margin-top: 10px;
+}
+
 .muted {
   color: #9bb0c9;
   font-size: 13px;
@@ -103,6 +157,75 @@ button:disabled {
   min-height: 120px;
 }
 
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+
+.tab {
+  max-width: none;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  opacity: 0.82;
+}
+
+.tab.active {
+  border-color: #4b6ea7;
+  background: #223254;
+  opacity: 1;
+  border-bottom-color: #0e1420;
+}
+
+.tab-panel {
+  border: 1px solid #22304a;
+  border-radius: 12px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  padding: 12px;
+  background: #0e1420;
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.check input {
+  width: auto;
+}
+
+.error {
+  color: #f9a8a8;
+  margin: 10px 0;
+  font-size: 13px;
+}
+
+.level-wrap {
+  margin-top: 12px;
+}
+
+.level-label {
+  margin-bottom: 4px;
+}
+
+.level-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #0b0f14;
+  border: 1px solid #22304a;
+}
+
+.level-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #4b6ea7;
+}
+
 @media (max-width: 760px) {
   .grid {
     grid-template-columns: 1fr;
@@ -111,5 +234,14 @@ button:disabled {
   .row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .health-tools {
+    justify-content: flex-start;
   }
 }

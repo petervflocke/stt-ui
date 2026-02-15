@@ -20,7 +20,8 @@ export async function transcribe({
   file,
   language,
   prompt,
-  temperature
+  temperature,
+  signal
 }) {
   const formData = new FormData();
   formData.append("file", file);
@@ -30,7 +31,8 @@ export async function transcribe({
 
   const response = await fetch("/api/transcribe", {
     method: "POST",
-    body: formData
+    body: formData,
+    signal
   });
   const text = await response.text();
 

@@ -3,7 +3,6 @@ export default function ResultPanel({
   canUseResult,
   onCopy,
   onDownloadText,
-  onDownloadJson,
   onClear
 }) {
   return (
@@ -16,9 +15,6 @@ export default function ResultPanel({
           </button>
           <button type="button" onClick={onDownloadText} disabled={!canUseResult}>
             Download .txt
-          </button>
-          <button type="button" onClick={onDownloadJson} disabled={!canUseResult}>
-            Download .json
           </button>
           <button type="button" onClick={onClear}>
             Clear

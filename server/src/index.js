@@ -111,21 +111,39 @@ app.post("/api/transcribe", upload.single("file"), async (req, res) => {
   if (language) form.append("language", language);
   if (prompt) form.append("prompt", prompt);
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TRANSCRIBE_TIMEOUT_MS);
+  const abortUpstreamOnRequestAbort = () => controller.abort();
+  const abortUpstreamOnResponseClose = () => {
+    if (!res.writableEnded) {
+      controller.abort();
+    }
+  };
+  req.on("aborted", abortUpstreamOnRequestAbort);
+  res.on("close", abortUpstreamOnResponseClose);
+
   try {
-    const upstream = await fetchWithTimeout(
-      `${STT_API_BASE}/v1/audio/transcriptions`,
-      {
-        method: "POST",
-        body: form
-      },
-      TRANSCRIBE_TIMEOUT_MS
-    );
+    const upstream = await fetch(`${STT_API_BASE}/v1/audio/transcriptions`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal
+    });
     const text = await upstream.text();
     const contentType = upstream.headers.get("content-type") || "application/json";
+    if (res.writableEnded) return;
     res.status(upstream.status).type(contentType).send(text);
   } catch (error) {
+    if (controller.signal.aborted && (req.aborted || res.destroyed || res.writableEnded)) {
+      log("info", "transcribe_proxy_cancelled_by_client");
+      return;
+    }
     log("error", "transcribe_proxy_failed", { error: String(error) });
+    if (res.writableEnded) return;
     res.status(502).json({ detail: `Cannot reach STT server: ${String(error)}` });
+  } finally {
+    clearTimeout(timeout);
+    req.off("aborted", abortUpstreamOnRequestAbort);
+    res.off("close", abortUpstreamOnResponseClose);
   }
 });
 
