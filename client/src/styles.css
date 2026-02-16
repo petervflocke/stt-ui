@@ -117,6 +117,96 @@ button:disabled {
   margin-top: 10px;
 }
 
+.progress-wrap {
+  margin-top: 10px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: #0b0f14;
+  border: 1px solid #22304a;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #4b6ea7;
+  transition: width 140ms linear;
+}
+
+.progress-bar.indeterminate {
+  position: relative;
+}
+
+.progress-indeterminate {
+  position: absolute;
+  top: 0;
+  left: -35%;
+  width: 35%;
+  height: 100%;
+  border-radius: 999px;
+  background: #4b6ea7;
+  animation: indeterminate-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes indeterminate-slide {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.diag-toggle {
+  margin-top: 10px;
+  text-align: left;
+}
+
+.diag-toolbar {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+}
+
+.diag-check {
+  margin-top: 0;
+}
+
+.btn-icon {
+  width: auto;
+  min-width: 36px;
+  padding: 6px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.diag-box-wrap {
+  position: relative;
+}
+
+.diag-copy-floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+
+.diag-box {
+  white-space: pre-wrap;
+  background: #0b0f14;
+  border: 1px solid #22304a;
+  border-radius: 12px;
+  padding: 42px 10px 10px;
+  margin-top: 8px;
+  color: #9bb0c9;
+}
+
 .row > * {
   flex: 1;
 }
@@ -155,6 +245,8 @@ button:disabled {
   border-radius: 12px;
   padding: 12px;
   min-height: 120px;
+  max-height: 360px;
+  overflow: auto;
 }
 
 .tabs {

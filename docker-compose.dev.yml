@@ -1,0 +1,8 @@
+services:
+  stt-ui:
+    command: python3 -m uvicorn pyserver.app:app --host 0.0.0.0 --port 8010 --reload
+    volumes:
+      - ./pyserver:/app/pyserver
+      - ./client/dist:/app/client-dist
+      - hf_cache:/root/.cache/huggingface
+      - ctranslate2_cache:/root/.cache/ctranslate2

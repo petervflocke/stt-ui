@@ -9,8 +9,14 @@ export default function TranscribeForm({
   onPromptChange,
   onTemperatureChange,
   onCancel,
+  progress,
+  progressMode,
   onSubmit
 }) {
+  const hasProgress = typeof progress === "number";
+  const percent = hasProgress ? Math.round(progress * 100) : 0;
+  const showProgress = progressMode === "determinate" || progressMode === "indeterminate";
+
   return (
     <form onSubmit={onSubmit}>
       <label className="label" htmlFor="file">
@@ -33,11 +39,12 @@ export default function TranscribeForm({
         </div>
         <div>
           <label className="label" htmlFor="temperature">
-            Temperature
+            Temperature (optional)
           </label>
           <input
             id="temperature"
             name="temperature"
+            placeholder="leave empty for model default"
             value={temperature}
             onChange={(event) => onTemperatureChange(event.target.value)}
           />
@@ -62,6 +69,20 @@ export default function TranscribeForm({
         </button>
         <span className="muted">{status}</span>
       </div>
+      {showProgress ? (
+        <div className="progress-wrap">
+          <div className={`progress-bar ${progressMode === "indeterminate" ? "indeterminate" : ""}`}>
+            {progressMode === "determinate" ? (
+              <div className="progress-fill" style={{ width: `${percent}%` }} />
+            ) : (
+              <div className="progress-indeterminate" />
+            )}
+          </div>
+          {progressMode === "determinate" ? (
+            <div className="muted small">{percent}%</div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="row cancel-row">
         <button type="button" onClick={onCancel} disabled={!canCancel}>

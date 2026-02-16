@@ -59,7 +59,6 @@ export default function MicRecorderPanel({
             max="0.08"
             step="0.001"
             value={micSensitivity}
-            disabled={isActive}
             onChange={(event) => onSensitivityChange(event.target.value)}
           />
         </div>
@@ -89,11 +88,12 @@ export default function MicRecorderPanel({
         </div>
         <div>
           <label className="label" htmlFor="temperature-mic">
-            Temperature
+            Temperature (optional)
           </label>
           <input
             id="temperature-mic"
             name="temperature-mic"
+            placeholder="leave empty for model default"
             value={temperature}
             onChange={(event) => onTemperatureChange(event.target.value)}
           />
