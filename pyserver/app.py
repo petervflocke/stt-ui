@@ -65,11 +65,25 @@ def decode_options(language: str | None, prompt: str | None, temperature: float 
     return options
 
 
-def store_upload(file: UploadFile, payload: bytes) -> str:
+async def store_upload_streaming(file: UploadFile) -> tuple[str, int]:
     suffix = Path(file.filename or "").suffix or ".mp3"
+    total_bytes = 0
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(payload)
-        return tmp.name
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > MAX_UPLOAD_MB * 1024 * 1024:
+                tmp_path = tmp.name
+                tmp.close()
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+                raise HTTPException(status_code=413, detail="file is too large")
+            tmp.write(chunk)
+        return tmp.name, total_bytes
 
 
 @app.post("/api/transcribe")
@@ -79,14 +93,10 @@ async def transcribe_json(
     prompt: Annotated[str | None, Form()] = None,
     temperature: Annotated[float | None, Form()] = None,
 ) -> JSONResponse:
-    payload = await file.read()
-    if not payload:
-        raise HTTPException(status_code=400, detail="file is required")
-    if len(payload) > MAX_UPLOAD_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="file is too large")
-
     started = time.time()
-    tmp_path = store_upload(file, payload)
+    tmp_path, byte_count = await store_upload_streaming(file)
+    if byte_count == 0:
+        raise HTTPException(status_code=400, detail="file is required")
 
     try:
         kwargs = decode_options(language, prompt, temperature)
@@ -116,17 +126,24 @@ async def transcribe_stream(
     prompt: Annotated[str | None, Form()] = None,
     temperature: Annotated[float | None, Form()] = None,
 ) -> StreamingResponse:
-    payload = await file.read()
-    if not payload:
+    request_started = time.time()
+    tmp_path, byte_count = await store_upload_streaming(file)
+    if byte_count == 0:
         raise HTTPException(status_code=400, detail="file is required")
-    if len(payload) > MAX_UPLOAD_MB * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="file is too large")
-
-    tmp_path = store_upload(file, payload)
-    started = time.time()
+    upload_stored_at = time.time()
 
     def emitter():
         try:
+            # Emit immediately so client can see server-side handoff delay separately.
+            yield json.dumps(
+                {
+                    "type": "phase",
+                    "phase": "preparing",
+                    "upload_store_ms": int((upload_stored_at - request_started) * 1000),
+                }
+            ) + "\n"
+
+            decode_started = time.time()
             kwargs = decode_options(language, prompt, temperature)
             segments_iter, info = get_model().transcribe(tmp_path, **kwargs)
             duration = float(getattr(info, "duration", 0.0) or 0.0)
@@ -136,6 +153,7 @@ async def transcribe_stream(
                     "type": "meta",
                     "duration": duration,
                     "language": getattr(info, "language", None),
+                    "prepare_ms": int((time.time() - decode_started) * 1000),
                 }
             ) + "\n"
 
@@ -165,7 +183,8 @@ async def transcribe_stream(
                     "language": info.language,
                     "language_probability": info.language_probability,
                     "progress": 1.0,
-                    "duration_ms": int((time.time() - started) * 1000),
+                    "duration_ms": int((time.time() - decode_started) * 1000),
+                    "total_request_ms": int((time.time() - request_started) * 1000),
                 }
             ) + "\n"
         finally:

@@ -59,7 +59,6 @@ export default function MicRecorderPanel({
             max="0.08"
             step="0.001"
             value={micSensitivity}
-            disabled={isActive}
             onChange={(event) => onSensitivityChange(event.target.value)}
           />
         </div>

@@ -48,14 +48,33 @@ function pickMimeType() {
   return "";
 }
 
+function formatBytes(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "n/a";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  const digits = size >= 100 || unit === 0 ? 0 : size >= 10 ? 1 : 2;
+  return `${size.toFixed(digits)} ${units[unit]}`;
+}
+
+function formatMs(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "n/a";
+  if (value < 1000) return `${Math.round(value)} ms`;
+  if (value < 60_000) return `${(value / 1000).toFixed(2)} s`;
+  const minutes = Math.floor(value / 60_000);
+  const seconds = ((value % 60_000) / 1000).toFixed(1);
+  return `${minutes}m ${seconds}s`;
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("upload");
   const [language, setLanguage] = useState("");
   const [prompt, setPrompt] = useState("");
   const [temperature, setTemperature] = useState("");
-
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [healthOutput, setHealthOutput] = useState("");
 
   const [uploadStatus, setUploadStatus] = useState("idle");
   const [uploadProgress, setUploadProgress] = useState(null);
@@ -77,6 +96,11 @@ export default function App() {
   const canUseResult = useMemo(() => resultText.trim().length > 0, [resultText]);
   const micActive = micStatus === "recording" || micStatus === "sending";
   const tabsLocked = submitting || micActive;
+  const progressMode = submitting
+    ? uploadStatus === "preparing..."
+      ? "indeterminate"
+      : "determinate"
+    : null;
 
   const mediaStreamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -146,25 +170,28 @@ export default function App() {
   }
 
   function renderDiagnostics(lines) {
-    return lines.filter(Boolean).join("\n");
+    return lines
+      .map((line) => (typeof line === "string" ? line.trim() : ""))
+      .filter(Boolean)
+      .join("\n");
   }
 
   async function refreshDiagnosticsHealth() {
-    const at = new Date().toLocaleTimeString();
-    setDiagHealthText(`backend_health: checking (${at})`);
+    const at = new Date().toLocaleTimeString("en-GB", { hour12: false });
+    setDiagHealthText(`Backend health: checking (${at})`);
     try {
       const health = await fetchHealth();
       const summary =
         health && typeof health === "object"
-          ? `status=${health.status || "n/a"}, model=${health.model || "n/a"}, device=${
+          ? `status=${health.status || "n/a"} | model=${health.model || "n/a"} | device=${
               health.device || "n/a"
-            }, compute=${health.compute_type || "n/a"}, loaded=${String(
+            } | compute=${health.compute_type || "n/a"} | loaded=${String(
               Boolean(health.model_loaded)
             )}`
           : "status=ok";
-      setDiagHealthText(`backend_health: ${summary} @ ${at}`);
+      setDiagHealthText(`Backend health: ${summary} @ ${at}`);
     } catch (error) {
-      setDiagHealthText(`backend_health: error (${String(error.message || error)}) @ ${at}`);
+      setDiagHealthText(`Backend health: error (${String(error.message || error)}) @ ${at}`);
     }
   }
 
@@ -239,10 +266,10 @@ export default function App() {
         }
         setDiagnosticsText(
           renderDiagnostics([
-            "mode: microphone chunk",
-            `blob_bytes: ${blob.size}`,
-            `total_ms: ${Math.round(endedAt - startedAt)}`,
-            decodeMs !== null ? `decode_ms: ${decodeMs}` : ""
+            "Mode: Microphone chunk",
+            `Chunk size: ${formatBytes(blob.size)}`,
+            `Total: ${formatMs(endedAt - startedAt)}`,
+            decodeMs !== null ? `Decode: ${formatMs(decodeMs)}` : ""
           ])
         );
       })
@@ -461,25 +488,6 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [diagOpen]);
 
-  async function handleCheckHealth() {
-    setHealthLoading(true);
-    setHealthOutput("checking...");
-    try {
-      const health = await fetchHealth();
-      if (health && health.model) {
-        setHealthOutput(
-          `ok (${health.model}, ${health.device || "n/a"}, ${health.compute_type || "n/a"})`
-        );
-      } else {
-        setHealthOutput("ok");
-      }
-    } catch {
-      setHealthOutput("error");
-    } finally {
-      setHealthLoading(false);
-    }
-  }
-
   async function handleSubmit(event) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -500,24 +508,49 @@ export default function App() {
     const requestStartedAt = performance.now();
 
     try {
-      setUploadStatus("processing...");
+      setUploadStatus("uploading...");
       let finalText = "";
       let firstEventAt = null;
       let firstSegmentAt = null;
       let decodeMs = null;
+      let prepareMs = null;
       let segmentCount = 0;
+      let uploadDoneAt = null;
       await transcribeStream({
         file,
         language: language.trim(),
         prompt: prompt.trim(),
         temperature: temperature.trim(),
         signal: controller.signal,
+        onUploadProgress: ({ progress }) => {
+          setUploadStatus("uploading...");
+          if (typeof progress === "number") {
+            const bounded = Math.max(0, Math.min(1, progress));
+            setUploadProgress(bounded);
+          }
+        },
+        onUploadComplete: () => {
+          if (uploadDoneAt === null) uploadDoneAt = performance.now();
+          setUploadStatus("preparing...");
+          setUploadProgress(1);
+        },
         onEvent: (event) => {
           if (!event || typeof event !== "object") return;
           const now = performance.now();
           if (firstEventAt === null) firstEventAt = now;
+          if (event.type === "phase") {
+            setUploadStatus("preparing...");
+            if (typeof event.upload_store_ms === "number") {
+              setDiagnosticsText((previous) =>
+                renderDiagnostics([previous, `Server upload store: ${formatMs(event.upload_store_ms)}`])
+              );
+            }
+            return;
+          }
           if (event.type === "meta") {
-            setUploadStatus("processing...");
+            setUploadStatus("transcribing...");
+            setUploadProgress(0);
+            if (typeof event.prepare_ms === "number") prepareMs = event.prepare_ms;
             return;
           }
           if (event.type === "segment") {
@@ -528,7 +561,8 @@ export default function App() {
               setResultText(event.text);
             }
             if (typeof event.progress === "number") {
-              setUploadProgress(Math.max(0, Math.min(1, event.progress)));
+              const bounded = Math.max(0, Math.min(1, event.progress));
+              setUploadProgress(bounded);
             }
             return;
           }
@@ -546,17 +580,24 @@ export default function App() {
       setUploadStatus("done");
       setDiagnosticsText(
         renderDiagnostics([
-          "mode: file upload stream",
-          `file_bytes: ${file.size}`,
-          `total_ms: ${Math.round(finishedAt - requestStartedAt)}`,
+          "Mode: File upload stream",
+          `File size: ${formatBytes(file.size)}`,
+          `Total: ${formatMs(finishedAt - requestStartedAt)}`,
+          uploadDoneAt !== null
+            ? `Upload: ${formatMs(uploadDoneAt - requestStartedAt)}`
+            : "",
           firstEventAt !== null
-            ? `first_event_ms: ${Math.round(firstEventAt - requestStartedAt)}`
+            ? `First server event: ${formatMs(firstEventAt - requestStartedAt)}`
             : "",
           firstSegmentAt !== null
-            ? `first_text_ms: ${Math.round(firstSegmentAt - requestStartedAt)}`
+            ? `First transcript text: ${formatMs(firstSegmentAt - requestStartedAt)}`
             : "",
-          decodeMs !== null ? `decode_ms: ${decodeMs}` : "",
-          `segments: ${segmentCount}`
+          decodeMs !== null ? `Decode: ${formatMs(decodeMs)}` : "",
+          prepareMs !== null ? `Prepare: ${formatMs(prepareMs)}` : "",
+          uploadDoneAt !== null && firstEventAt !== null
+            ? `Post-upload gap: ${formatMs(firstEventAt - uploadDoneAt)}`
+            : "",
+          `Segments: ${segmentCount}`
         ])
       );
     } catch (error) {
@@ -572,10 +613,10 @@ export default function App() {
       }
       setDiagnosticsText(
         renderDiagnostics([
-          "mode: file upload stream",
-          `file_bytes: ${file.size}`,
-          `status: ${statusLabel}`,
-          `error: ${String(error.message || error)}`
+          "Mode: File upload stream",
+          `File size: ${formatBytes(file.size)}`,
+          `Status: ${statusLabel}`,
+          `Error: ${String(error.message || error)}`
         ])
       );
     } finally {
@@ -611,18 +652,6 @@ export default function App() {
     <main className="wrap">
       <header className="top-bar">
         <h1>Local Transcription</h1>
-        <div className="health-tools">
-          <button
-            type="button"
-            className="btn-compact"
-            onClick={handleCheckHealth}
-            disabled={healthLoading}
-            aria-label="Check backend status"
-          >
-            {healthLoading ? "Checking..." : "Check API health"}
-          </button>
-          <span className="muted health-details">{healthOutput}</span>
-        </div>
       </header>
 
       <section className="card">
@@ -675,6 +704,7 @@ export default function App() {
             onTemperatureChange={setTemperature}
             canCancel={submitting}
             progress={uploadProgress}
+            progressMode={progressMode}
             onCancel={handleCancelSubmit}
             onSubmit={handleSubmit}
           />

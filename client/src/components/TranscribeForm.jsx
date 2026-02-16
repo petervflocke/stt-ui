@@ -10,10 +10,12 @@ export default function TranscribeForm({
   onTemperatureChange,
   onCancel,
   progress,
+  progressMode,
   onSubmit
 }) {
   const hasProgress = typeof progress === "number";
   const percent = hasProgress ? Math.round(progress * 100) : 0;
+  const showProgress = progressMode === "determinate" || progressMode === "indeterminate";
 
   return (
     <form onSubmit={onSubmit}>
@@ -67,12 +69,15 @@ export default function TranscribeForm({
         </button>
         <span className="muted">{status}</span>
       </div>
-      {hasProgress ? (
+      {showProgress ? (
         <div className="progress-wrap">
-          <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${percent}%` }} />
+          <div className={`progress-bar ${progressMode === "indeterminate" ? "indeterminate" : ""}`}>
+            {progressMode === "determinate" ? (
+              <div className="progress-fill" style={{ width: `${percent}%` }} />
+            ) : (
+              <div className="progress-indeterminate" />
+            )}
           </div>
-          <div className="muted small">{percent}%</div>
         </div>
       ) : null}
 
