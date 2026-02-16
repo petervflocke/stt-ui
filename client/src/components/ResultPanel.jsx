@@ -1,10 +1,20 @@
+import { useEffect, useState } from "react";
+
 export default function ResultPanel({
   resultText,
   canUseResult,
+  diagnostics,
+  onDiagnosticsOpenChange,
   onCopy,
   onDownloadText,
   onClear
 }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (onDiagnosticsOpenChange) onDiagnosticsOpenChange(open);
+  }, [open, onDiagnosticsOpenChange]);
+
   return (
     <section className="card">
       <div className="row space">
@@ -21,6 +31,18 @@ export default function ResultPanel({
           </button>
         </div>
       </div>
+
+      <button
+        type="button"
+        className="diag-toggle"
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        {open ? "v Diagnostics" : "> Diagnostics"}
+      </button>
+      {open ? (
+        <pre className="diag-box">{diagnostics || "No diagnostics yet."}</pre>
+      ) : null}
+
       <pre className="out">{resultText}</pre>
     </section>
   );

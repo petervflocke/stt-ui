@@ -2,15 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MicRecorderPanel from "./components/MicRecorderPanel.jsx";
 import ResultPanel from "./components/ResultPanel.jsx";
 import TranscribeForm from "./components/TranscribeForm.jsx";
-import { fetchHealth, transcribe } from "./api.js";
+import { fetchHealth, transcribe, transcribeStream } from "./api.js";
 
 const ANALYSIS_INTERVAL_MS = 30;
 const CALIBRATION_MS = 1200;
-const SILENCE_TRIGGER_MS = 700;
-const MIN_CHUNK_MS = 1500;
+const SILENCE_TRIGGER_MS = 450;
+const MIN_CHUNK_MS = 900;
 const FINAL_MIN_CHUNK_MS = 200;
 const MIN_VOICE_ACTIVITY_MS = 180;
 const MIN_PEAK_RMS = 0.012;
+const DIAG_HEALTH_REFRESH_MS = 15_000;
 
 function download(filename, content, mime) {
   const blob = new Blob([content], { type: mime });
@@ -57,15 +58,19 @@ export default function App() {
   const [healthOutput, setHealthOutput] = useState("");
 
   const [uploadStatus, setUploadStatus] = useState("idle");
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [resultText, setResultText] = useState("");
+  const [diagnosticsText, setDiagnosticsText] = useState("");
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagHealthText, setDiagHealthText] = useState("");
 
   const [micStatus, setMicStatus] = useState("idle");
   const [micError, setMicError] = useState("");
   const [micLevel, setMicLevel] = useState(0);
   const [micThreshold, setMicThreshold] = useState(0.02);
   const [micSensitivity, setMicSensitivity] = useState(0.02);
-  const [micMaxChunkSeconds, setMicMaxChunkSeconds] = useState(12);
+  const [micMaxChunkSeconds, setMicMaxChunkSeconds] = useState(8);
   const [micResultMode, setMicResultMode] = useState("clear");
   const [useRollingPrompt, setUseRollingPrompt] = useState(true);
 
@@ -99,7 +104,7 @@ export default function App() {
   const sensitivityRef = useRef(0.02);
   const thresholdRef = useRef(0.02);
   const rollingPromptRef = useRef(true);
-  const maxChunkMsRef = useRef(12_000);
+  const maxChunkMsRef = useRef(8_000);
   const chunkVoiceMsRef = useRef(0);
   const chunkPeakRmsRef = useRef(0);
 
@@ -138,6 +143,29 @@ export default function App() {
   function updateMicStatus(nextStatus, nextError = "") {
     setMicStatus(nextStatus);
     setMicError(nextError);
+  }
+
+  function renderDiagnostics(lines) {
+    return lines.filter(Boolean).join("\n");
+  }
+
+  async function refreshDiagnosticsHealth() {
+    const at = new Date().toLocaleTimeString();
+    setDiagHealthText(`backend_health: checking (${at})`);
+    try {
+      const health = await fetchHealth();
+      const summary =
+        health && typeof health === "object"
+          ? `status=${health.status || "n/a"}, model=${health.model || "n/a"}, device=${
+              health.device || "n/a"
+            }, compute=${health.compute_type || "n/a"}, loaded=${String(
+              Boolean(health.model_loaded)
+            )}`
+          : "status=ok";
+      setDiagHealthText(`backend_health: ${summary} @ ${at}`);
+    } catch (error) {
+      setDiagHealthText(`backend_health: error (${String(error.message || error)}) @ ${at}`);
+    }
   }
 
   function rollingPrompt() {
@@ -193,16 +221,30 @@ export default function App() {
 
     queueRef.current = queueRef.current
       .then(async () => {
+        const startedAt = performance.now();
         const response = await transcribe({
           file,
           language: languageRef.current.trim(),
           prompt: rollingPrompt(),
           temperature: temperatureRef.current.trim()
         });
+        const endedAt = performance.now();
         const text = extractTranscriptText(response);
+        const decodeMs =
+          response && response.json && typeof response.json.duration_ms === "number"
+            ? response.json.duration_ms
+            : null;
         if (text) {
           setResultText((previous) => (previous ? `${previous} ${text}` : text));
         }
+        setDiagnosticsText(
+          renderDiagnostics([
+            "mode: microphone chunk",
+            `blob_bytes: ${blob.size}`,
+            `total_ms: ${Math.round(endedAt - startedAt)}`,
+            decodeMs !== null ? `decode_ms: ${decodeMs}` : ""
+          ])
+        );
       })
       .catch((error) => {
         updateMicStatus("error", String(error.message || error));
@@ -410,6 +452,15 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!diagOpen) return undefined;
+    refreshDiagnosticsHealth();
+    const timer = window.setInterval(() => {
+      refreshDiagnosticsHealth();
+    }, DIAG_HEALTH_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [diagOpen]);
+
   async function handleCheckHealth() {
     setHealthLoading(true);
     setHealthOutput("checking...");
@@ -441,30 +492,92 @@ export default function App() {
 
     setSubmitting(true);
     setUploadStatus("uploading...");
+    setUploadProgress(0);
     setResultText("");
+    setDiagnosticsText("");
     const controller = new AbortController();
     uploadAbortRef.current = controller;
+    const requestStartedAt = performance.now();
 
     try {
       setUploadStatus("processing...");
-      const response = await transcribe({
+      let finalText = "";
+      let firstEventAt = null;
+      let firstSegmentAt = null;
+      let decodeMs = null;
+      let segmentCount = 0;
+      await transcribeStream({
         file,
         language: language.trim(),
         prompt: prompt.trim(),
         temperature: temperature.trim(),
-        signal: controller.signal
+        signal: controller.signal,
+        onEvent: (event) => {
+          if (!event || typeof event !== "object") return;
+          const now = performance.now();
+          if (firstEventAt === null) firstEventAt = now;
+          if (event.type === "meta") {
+            setUploadStatus("processing...");
+            return;
+          }
+          if (event.type === "segment") {
+            if (firstSegmentAt === null) firstSegmentAt = now;
+            segmentCount += 1;
+            if (typeof event.text === "string") {
+              finalText = event.text;
+              setResultText(event.text);
+            }
+            if (typeof event.progress === "number") {
+              setUploadProgress(Math.max(0, Math.min(1, event.progress)));
+            }
+            return;
+          }
+          if (event.type === "done") {
+            if (typeof event.duration_ms === "number") decodeMs = event.duration_ms;
+            if (typeof event.text === "string") {
+              finalText = event.text;
+            }
+            setUploadProgress(1);
+          }
+        }
       });
-      const text = extractTranscriptText(response);
-      setResultText(text);
+      const finishedAt = performance.now();
+      setResultText(finalText);
       setUploadStatus("done");
+      setDiagnosticsText(
+        renderDiagnostics([
+          "mode: file upload stream",
+          `file_bytes: ${file.size}`,
+          `total_ms: ${Math.round(finishedAt - requestStartedAt)}`,
+          firstEventAt !== null
+            ? `first_event_ms: ${Math.round(firstEventAt - requestStartedAt)}`
+            : "",
+          firstSegmentAt !== null
+            ? `first_text_ms: ${Math.round(firstSegmentAt - requestStartedAt)}`
+            : "",
+          decodeMs !== null ? `decode_ms: ${decodeMs}` : "",
+          `segments: ${segmentCount}`
+        ])
+      );
     } catch (error) {
+      const statusLabel = error && error.name === "AbortError" ? "cancelled" : "error";
       if (error && error.name === "AbortError") {
         setUploadStatus("cancelled");
+        setUploadProgress(null);
         setResultText("Transcription cancelled.");
       } else {
         setUploadStatus("error");
+        setUploadProgress(null);
         setResultText(String(error.message || error));
       }
+      setDiagnosticsText(
+        renderDiagnostics([
+          "mode: file upload stream",
+          `file_bytes: ${file.size}`,
+          `status: ${statusLabel}`,
+          `error: ${String(error.message || error)}`
+        ])
+      );
     } finally {
       uploadAbortRef.current = null;
       setSubmitting(false);
@@ -489,6 +602,8 @@ export default function App() {
 
   function handleClear() {
     setUploadStatus("idle");
+    setUploadProgress(null);
+    setDiagnosticsText("");
     setResultText("");
   }
 
@@ -504,7 +619,7 @@ export default function App() {
             disabled={healthLoading}
             aria-label="Check backend status"
           >
-            {healthLoading ? "Checking..." : "Check backend"}
+            {healthLoading ? "Checking..." : "Check API health"}
           </button>
           <span className="muted health-details">{healthOutput}</span>
         </div>
@@ -559,6 +674,7 @@ export default function App() {
             onPromptChange={setPrompt}
             onTemperatureChange={setTemperature}
             canCancel={submitting}
+            progress={uploadProgress}
             onCancel={handleCancelSubmit}
             onSubmit={handleSubmit}
           />
@@ -600,6 +716,8 @@ export default function App() {
       <ResultPanel
         resultText={resultText}
         canUseResult={canUseResult}
+        diagnostics={renderDiagnostics([diagnosticsText, diagHealthText])}
+        onDiagnosticsOpenChange={setDiagOpen}
         onCopy={handleCopy}
         onDownloadText={handleDownloadText}
         onClear={handleClear}

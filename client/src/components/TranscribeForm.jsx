@@ -9,8 +9,12 @@ export default function TranscribeForm({
   onPromptChange,
   onTemperatureChange,
   onCancel,
+  progress,
   onSubmit
 }) {
+  const hasProgress = typeof progress === "number";
+  const percent = hasProgress ? Math.round(progress * 100) : 0;
+
   return (
     <form onSubmit={onSubmit}>
       <label className="label" htmlFor="file">
@@ -63,6 +67,14 @@ export default function TranscribeForm({
         </button>
         <span className="muted">{status}</span>
       </div>
+      {hasProgress ? (
+        <div className="progress-wrap">
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${percent}%` }} />
+          </div>
+          <div className="muted small">{percent}%</div>
+        </div>
+      ) : null}
 
       <div className="row cancel-row">
         <button type="button" onClick={onCancel} disabled={!canCancel}>

@@ -52,3 +52,57 @@ export async function transcribe({
     raw: text
   };
 }
+
+export async function transcribeStream({
+  file,
+  language,
+  prompt,
+  temperature,
+  signal,
+  onEvent
+}) {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (language) formData.append("language", language);
+  if (prompt) formData.append("prompt", prompt);
+  if (temperature) formData.append("temperature", temperature);
+
+  const response = await fetch("/api/transcribe/stream", {
+    method: "POST",
+    body: formData,
+    signal
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Transcription stream failed");
+  }
+  if (!response.body) {
+    throw new Error("Streaming response body is not available");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIndex = buffer.indexOf("\n");
+    while (newlineIndex !== -1) {
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line) {
+        try {
+          const event = JSON.parse(line);
+          if (onEvent) onEvent(event);
+        } catch {
+          // ignore malformed lines
+        }
+      }
+      newlineIndex = buffer.indexOf("\n");
+    }
+  }
+}

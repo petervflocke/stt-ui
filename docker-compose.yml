@@ -11,5 +11,14 @@ services:
       WHISPER_MODEL: "small"
       WHISPER_DEVICE: "cuda"
       WHISPER_COMPUTE_TYPE: "float16"
+      WHISPER_BEAM_SIZE: "3"
+      WHISPER_VAD_FILTER: "true"
       MAX_UPLOAD_MB: "1024"
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+      - ctranslate2_cache:/root/.cache/ctranslate2
     restart: unless-stopped
+
+volumes:
+  hf_cache:
+  ctranslate2_cache:
