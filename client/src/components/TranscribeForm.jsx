@@ -33,11 +33,12 @@ export default function TranscribeForm({
         </div>
         <div>
           <label className="label" htmlFor="temperature">
-            Temperature
+            Temperature (optional)
           </label>
           <input
             id="temperature"
             name="temperature"
+            placeholder="leave empty for model default"
             value={temperature}
             onChange={(event) => onTemperatureChange(event.target.value)}
           />

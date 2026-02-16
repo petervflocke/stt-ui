@@ -2,13 +2,14 @@ services:
   stt-ui:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: pyserver/Dockerfile
     container_name: stt-ui
     ports:
       - "8010:8010"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    gpus: all
     environment:
-      PORT: "8010"
-      STT_API_BASE: "http://host.docker.internal:8001"
+      WHISPER_MODEL: "small"
+      WHISPER_DEVICE: "cuda"
+      WHISPER_COMPUTE_TYPE: "float16"
+      MAX_UPLOAD_MB: "1024"
     restart: unless-stopped

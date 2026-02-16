@@ -51,7 +51,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("upload");
   const [language, setLanguage] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [temperature, setTemperature] = useState("0.0");
+  const [temperature, setTemperature] = useState("");
 
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthOutput, setHealthOutput] = useState("");
@@ -95,7 +95,7 @@ export default function App() {
   const resultTextRef = useRef("");
   const languageRef = useRef("");
   const promptRef = useRef("");
-  const temperatureRef = useRef("0.0");
+  const temperatureRef = useRef("");
   const sensitivityRef = useRef(0.02);
   const thresholdRef = useRef(0.02);
   const rollingPromptRef = useRef(true);

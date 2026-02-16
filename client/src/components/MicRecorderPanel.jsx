@@ -89,11 +89,12 @@ export default function MicRecorderPanel({
         </div>
         <div>
           <label className="label" htmlFor="temperature-mic">
-            Temperature
+            Temperature (optional)
           </label>
           <input
             id="temperature-mic"
             name="temperature-mic"
+            placeholder="leave empty for model default"
             value={temperature}
             onChange={(event) => onTemperatureChange(event.target.value)}
           />

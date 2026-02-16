@@ -96,7 +96,6 @@ app.post("/api/transcribe", upload.single("file"), async (req, res) => {
   const prompt = typeof req.body.prompt === "string" ? req.body.prompt.trim() : "";
   const temperatureInput =
     typeof req.body.temperature === "string" ? req.body.temperature.trim() : "";
-  const temperature = temperatureInput || "0.0";
 
   const form = new FormData();
   const blob = new Blob([req.file.buffer], {
@@ -107,7 +106,7 @@ app.post("/api/transcribe", upload.single("file"), async (req, res) => {
     blob,
     req.file.originalname || "audio"
   );
-  form.append("temperature", temperature);
+  if (temperatureInput) form.append("temperature", temperatureInput);
   if (language) form.append("language", language);
   if (prompt) form.append("prompt", prompt);
 
