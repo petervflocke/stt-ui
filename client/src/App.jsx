@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import MicRecorderPanel from "./components/MicRecorderPanel.jsx";
 import ResultPanel from "./components/ResultPanel.jsx";
 import TranscribeForm from "./components/TranscribeForm.jsx";
-import { fetchHealth, transcribe, transcribeStream } from "./api.js";
+import { fetchHealth, transcribe, transcribeStream, warmupModel } from "./api.js";
 
 const ANALYSIS_INTERVAL_MS = 30;
 const CALIBRATION_MS = 1200;
@@ -83,6 +83,8 @@ export default function App() {
   const [diagnosticsText, setDiagnosticsText] = useState("");
   const [diagOpen, setDiagOpen] = useState(false);
   const [diagHealthText, setDiagHealthText] = useState("");
+  const [warmupLoading, setWarmupLoading] = useState(false);
+  const [warmupText, setWarmupText] = useState("");
 
   const [micStatus, setMicStatus] = useState("idle");
   const [micError, setMicError] = useState("");
@@ -192,6 +194,21 @@ export default function App() {
       setDiagHealthText(`Backend health: ${summary} @ ${at}`);
     } catch (error) {
       setDiagHealthText(`Backend health: error (${String(error.message || error)}) @ ${at}`);
+    }
+  }
+
+  async function handleWarmupModel() {
+    setWarmupLoading(true);
+    setWarmupText("warming...");
+    try {
+      const response = await warmupModel();
+      const durationMs =
+        response && typeof response.duration_ms === "number" ? response.duration_ms : null;
+      setWarmupText(durationMs !== null ? `warmed (${formatMs(durationMs)})` : "warmed");
+    } catch (error) {
+      setWarmupText(`warmup failed: ${String(error.message || error)}`);
+    } finally {
+      setWarmupLoading(false);
     }
   }
 
@@ -580,7 +597,7 @@ export default function App() {
       setUploadStatus("done");
       setDiagnosticsText(
         renderDiagnostics([
-          "Mode: File upload stream",
+          `Mode: File upload stream, ${file.name}`,
           `File size: ${formatBytes(file.size)}`,
           `Total: ${formatMs(finishedAt - requestStartedAt)}`,
           uploadDoneAt !== null
@@ -613,7 +630,7 @@ export default function App() {
       }
       setDiagnosticsText(
         renderDiagnostics([
-          "Mode: File upload stream",
+          `Mode: File upload stream, ${file.name}`,
           `File size: ${formatBytes(file.size)}`,
           `Status: ${statusLabel}`,
           `Error: ${String(error.message || error)}`
@@ -652,6 +669,17 @@ export default function App() {
     <main className="wrap">
       <header className="top-bar">
         <h1>Local Transcription</h1>
+        <div className="health-tools">
+          <button
+            type="button"
+            className="btn-compact"
+            onClick={handleWarmupModel}
+            disabled={warmupLoading}
+          >
+            {warmupLoading ? "Warming..." : "Warm model"}
+          </button>
+          <span className="muted health-details">{warmupText}</span>
+        </div>
       </header>
 
       <section className="card">
@@ -750,6 +778,10 @@ export default function App() {
         onDiagnosticsOpenChange={setDiagOpen}
         onCopy={handleCopy}
         onDownloadText={handleDownloadText}
+        onCopyDiagnostics={async () => {
+          if (!diagnosticsText && !diagHealthText) return;
+          await navigator.clipboard.writeText(renderDiagnostics([diagnosticsText, diagHealthText]));
+        }}
         onClear={handleClear}
       />
     </main>

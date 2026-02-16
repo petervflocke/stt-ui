@@ -166,12 +166,43 @@ button:disabled {
   text-align: left;
 }
 
+.diag-toolbar {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px;
+}
+
+.diag-check {
+  margin-top: 0;
+}
+
+.btn-icon {
+  width: auto;
+  min-width: 36px;
+  padding: 6px 10px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.diag-box-wrap {
+  position: relative;
+}
+
+.diag-copy-floating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+}
+
 .diag-box {
   white-space: pre-wrap;
   background: #0b0f14;
   border: 1px solid #22304a;
   border-radius: 12px;
-  padding: 10px;
+  padding: 42px 10px 10px;
   margin-top: 8px;
   color: #9bb0c9;
 }
@@ -214,6 +245,8 @@ button:disabled {
   border-radius: 12px;
   padding: 12px;
   min-height: 120px;
+  max-height: 360px;
+  overflow: auto;
 }
 
 .tabs {

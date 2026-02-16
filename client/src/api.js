@@ -16,6 +16,24 @@ export async function fetchHealth() {
   return json;
 }
 
+export async function warmupModel() {
+  const response = await fetch("/api/warmup", { method: "POST" });
+  const text = await response.text();
+
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    json = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(json ? JSON.stringify(json) : text || "Model warmup failed");
+  }
+
+  return json;
+}
+
 export async function transcribe({
   file,
   language,

@@ -53,6 +53,17 @@ def health() -> dict:
     }
 
 
+@app.post("/api/warmup")
+def warmup() -> dict:
+    started = time.time()
+    get_model()
+    return {
+        "status": "ok",
+        "model_loaded": True,
+        "duration_ms": int((time.time() - started) * 1000),
+    }
+
+
 def decode_options(language: str | None, prompt: str | None, temperature: float | None) -> dict:
     options = {
         "language": language or None,

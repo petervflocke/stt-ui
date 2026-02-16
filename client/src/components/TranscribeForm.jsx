@@ -78,6 +78,9 @@ export default function TranscribeForm({
               <div className="progress-indeterminate" />
             )}
           </div>
+          {progressMode === "determinate" ? (
+            <div className="muted small">{percent}%</div>
+          ) : null}
         </div>
       ) : null}
 
