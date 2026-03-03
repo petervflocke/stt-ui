@@ -17,6 +17,18 @@ services:
     volumes:
       - hf_cache:/root/.cache/huggingface
       - ctranslate2_cache:/root/.cache/ctranslate2
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import ctranslate2, urllib.request, json; c=ctranslate2.get_cuda_device_count(); assert c > 0, f'cuda_device_count={c}'; data=json.loads(urllib.request.urlopen('http://127.0.0.1:8010/api/health', timeout=5).read().decode()); assert data.get('status') == 'ok'; assert data.get('device') == 'cuda'"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped
 
 volumes:
